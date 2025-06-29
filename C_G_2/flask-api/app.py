@@ -419,14 +419,9 @@ def predict():
 
         # Create Pool with categorical feature info
         cat_features = [
-                'Body Type',
-                'Sex',
-                'Diet',
-                'Heating Energy Source',
-                'Transport',
-                'Vehicle Type',
-                'Recycling',
-                'Cooking_With'
+           'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+            'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
+            'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
         ]
         input_pool = Pool(data=input_df, cat_features=cat_features)
 
