@@ -7,45 +7,27 @@ const FLASK_API_URL = process.env.NEXT_PUBLIC_FLASK_API_URL || "http://localhost
 // Submit carbon footprint data
 export const submitCarbonData = async (formData) => {
   try {
-    // First, get prediction from Flask API
+    // Get prediction and insights from Flask API
     console.log("Sending data to Flask API:", formData)
     const flaskResponse = await axios.post(`${FLASK_API_URL}/predict`, formData)
     console.log("Flask API response:", flaskResponse.data)
 
     // Check if we have a prediction
     if (flaskResponse.data && flaskResponse.data.prediction !== undefined) {
-      // Get insights with the same data
-      try {
-        const insightsResponse = await axios.post(`${FLASK_API_URL}/insights`, { carbonData: formData })
-        console.log("Flask API insights response:", insightsResponse.data)
-
-        return {
-          prediction: flaskResponse.data.prediction,
-          insights: insightsResponse.data.insights,
-        }
-      } catch (insightsError) {
-        console.error("Error getting insights from Flask API:", insightsError)
-        return {
-          prediction: flaskResponse.data.prediction,
-          insights: generateFallbackInsights(formData),
-        }
+      return {
+        prediction: flaskResponse.data.prediction,
+        insights: {
+          category_breakdown: flaskResponse.data.category_breakdown || [],
+          top_individual_features: flaskResponse.data.top_individual_features || [],
+          recommendations: flaskResponse.data.recommendations || [],
+        },
       }
     } else {
-      // Generate a fallback prediction if the API doesn't return one
-      console.warn("No prediction received from Flask API, using fallback value")
-      return {
-        prediction: calculateFallbackPrediction(formData),
-        insights: generateFallbackInsights(formData),
-      }
+      throw new Error("No prediction received from the API")
     }
   } catch (error) {
     console.error("Error in submitCarbonData:", error)
-    // Generate a fallback prediction if the API call fails
-    console.warn("Flask API call failed, using fallback prediction")
-    return {
-      prediction: calculateFallbackPrediction(formData),
-      insights: generateFallbackInsights(formData),
-    }
+    throw error
   }
 }
 
@@ -90,101 +72,6 @@ export const saveCarbonDataToDatabase = async (formData, carbonEmission) => {
   }
 }
 
-// Calculate a fallback prediction if the API call fails
-function calculateFallbackPrediction(formData) {
-  // Simple calculation based on form data
-  let emission = 1500 // Base value in kg
-
-  // Add based on transport
-  if (formData["Transport"] === "private") emission += 500
-  if (formData["Transport"] === "public") emission += 200
-
-  // Add based on diet
-  if (formData["Diet"] === "omnivore") emission += 400
-  if (formData["Diet"] === "vegetarian") emission -= 100
-  if (formData["Diet"] === "vegan") emission -= 200
-
-  // Add based on heating
-  if (formData["Heating Energy Source"] === "coal") emission += 300
-  if (formData["Heating Energy Source"] === "natural gas") emission += 200
-
-  // Add based on vehicle distance
-  emission += formData["Vehicle Monthly Distance Km"] * 0.5
-
-  // Add random variation
-  emission += Math.random() * 200
-
-  return Number(emission.toFixed(2))
-}
-
-// Generate fallback insights if the API doesn't provide them
-function generateFallbackInsights(formData) {
-  // Create mock major contributing features
-  const majorFeatures = [
-    {
-      feature: "Vehicle Monthly Distance Km",
-      contribution: formData["Vehicle Monthly Distance Km"] * 0.5,
-      percentage: 30,
-    },
-    {
-      feature: "How Many New Clothes Monthly",
-      contribution: formData["How Many New Clothes Monthly"] * 20,
-      percentage: 25,
-    },
-    {
-      feature: "Waste Bag Weekly Count",
-      contribution: formData["Waste Bag Weekly Count"] * 30,
-      percentage: 20,
-    },
-    {
-      feature: "Monthly Grocery Bill",
-      contribution: formData["Monthly Grocery Bill"] * 0.1,
-      percentage: 15,
-    },
-    {
-      feature: "How Long Internet Daily Hour",
-      contribution: formData["How Long Internet Daily Hour"] * 5,
-      percentage: 10,
-    },
-  ]
-
-  return {
-    major_contributing_features: majorFeatures,
-    recommendations: [
-      {
-        category: "Transport",
-        title: "Reduce car usage",
-        description: "Try using public transportation, biking, or walking for short trips.",
-        impact: "high",
-      },
-      {
-        category: "Home Energy",
-        title: "Switch to cleaner energy",
-        description: "Consider switching to renewable energy sources for your home.",
-        impact: "high",
-      },
-      {
-        category: "Food",
-        title: "Reduce meat consumption",
-        description: "Try incorporating more plant-based meals into your diet each week.",
-        impact: "medium",
-      },
-      {
-        category: "Consumption",
-        title: "Buy fewer new clothes",
-        description: "Consider second-hand shopping or extending the life of your current wardrobe.",
-        impact: "medium",
-      },
-      {
-        category: "Waste",
-        title: "Improve recycling habits",
-        description: "Expand your recycling to include more materials like glass and electronics.",
-        impact: "low",
-      },
-    ],
-  }
-}
-
 // Get all carbon footprint data for user
 export const getCarbonData = async () => {
   try {
@@ -195,7 +82,6 @@ export const getCarbonData = async () => {
     return response.data
   } catch (error) {
     console.error("Error fetching carbon data:", error)
-    // Return empty array as fallback
     return []
   }
 }
@@ -228,7 +114,7 @@ export const getLatestCarbonData = async () => {
           "Waste Bag Weekly Count": response.data.latestData.wasteBagWeeklyCount,
           "How Long TV PC Daily Hour": response.data.latestData.howLongTvPcDailyHour,
           "How Many New Clothes Monthly": response.data.latestData.howManyNewClothesMonthly,
-          "How Long Internet Daily Hour": response.data.latestData.howLongInternetDailyHour,
+          "How Long InternetDailyHour": response.data.latestData.howLongInternetDailyHour,
           "Energy efficiency": response.data.latestData.energyEfficiency,
           Recycling: response.data.latestData.recycling,
           Cooking_With: response.data.latestData.cookingWith,
@@ -244,46 +130,15 @@ export const getLatestCarbonData = async () => {
         }
       } catch (insightsError) {
         console.error("Error getting insights from Flask API:", insightsError)
-        // Keep the original insights if available, or use fallback
-        if (!response.data.insights) {
-          response.data.insights = generateFallbackInsights({
-            Transport: response.data.latestData.transport,
-            "Heating Energy Source": response.data.latestData.heatingEnergySource,
-            Diet: response.data.latestData.diet,
-            "How Many New Clothes Monthly": response.data.latestData.howManyNewClothesMonthly,
-            "Waste Bag Weekly Count": response.data.latestData.wasteBagWeeklyCount,
-            "Monthly Grocery Bill": response.data.latestData.monthlyGroceryBill,
-            "Vehicle Monthly Distance Km": response.data.latestData.vehicleMonthlyDistanceKm,
-            "How Long Internet Daily Hour": response.data.latestData.howLongInternetDailyHour,
-          })
-        }
+        // Don't provide fallback insights, just use what we have
       }
     }
 
     return response.data
   } catch (error) {
     console.error("Error fetching latest carbon data:", error)
-    // Return fallback data
-    return {
-      latestData: {
-        carbonEmission: 1250, // in kg
-        date: new Date().toISOString(),
-      },
-      previousData: {
-        carbonEmission: 1420, // in kg
-      },
-      changePercentage: -12,
-      insights: generateFallbackInsights({
-        Transport: "public",
-        "Heating Energy Source": "electricity",
-        Diet: "omnivore",
-        "How Many New Clothes Monthly": 2,
-        "Waste Bag Weekly Count": 1,
-        "Monthly Grocery Bill": 300,
-        "Vehicle Monthly Distance Km": 200,
-        "How Long Internet Daily Hour": 4,
-      }),
-    }
+    // Return null for new users instead of fallback data
+    return null
   }
 }
 
