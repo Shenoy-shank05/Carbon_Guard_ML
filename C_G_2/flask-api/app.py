@@ -52,16 +52,22 @@ FEATURE_CATEGORIES = {
 
 def preprocess_input_for_catboost(data):
     """
-    Minimal preprocessing for CatBoost with proper data type handling
+    Preprocess a single input JSON object to match CatBoost training requirements.
+    Ensures correct order and data types for prediction.
     """
     print(f"Preprocessing data for CatBoost: {data}")
     
     # Convert to DataFrame
     input_df = pd.DataFrame([data])
 
-    numerical_columns = [
-        'Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
-        'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour'
+    # Exact feature order used in CatBoost training
+    model_columns = [
+        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+        'Transport', 'Vehicle Type', 'Social Activity', 'Monthly Grocery Bill',
+        'Frequency of Traveling by Air', 'Vehicle Monthly Distance Km',
+        'Waste Bag Size', 'Waste Bag Weekly Count', 'How Long TV PC Daily Hour',
+        'How Many New Clothes Monthly', 'How Long Internet Daily Hour',
+        'Energy efficiency', 'Recycling', 'Cooking_With'
     ]
 
     categorical_columns = [
@@ -70,17 +76,14 @@ def preprocess_input_for_catboost(data):
         'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
     ]
 
-    all_expected_columns = numerical_columns + categorical_columns
+    numerical_columns = list(set(model_columns) - set(categorical_columns))
 
-    # Fill missing columns
-    for col in all_expected_columns:
+    # Fill missing values
+    for col in model_columns:
         if col not in input_df.columns:
-            if col in numerical_columns:
-                input_df[col] = 0
-            else:
-                input_df[col] = 'None'
+            input_df[col] = 'None' if col in categorical_columns else 0
 
-    # Handle list-type columns
+    # Handle list-type inputs
     for col in ['Recycling', 'Cooking_With']:
         if col in input_df.columns:
             val = input_df[col].iloc[0]
@@ -89,19 +92,18 @@ def preprocess_input_for_catboost(data):
             else:
                 input_df[col] = [str(val)]
 
-    # Coerce numerical columns safely
+    # Convert types
     for col in numerical_columns:
-        input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0).astype(int)
+        input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0)
 
-    # Force categorical columns to string
     for col in categorical_columns:
         input_df[col] = input_df[col].astype(str)
 
-    # Reindex just to match order, but no NaNs should be created here
-    input_df = input_df[all_expected_columns]
+    # Enforce exact column order used during training
+    input_df = input_df[model_columns]
 
-    # Final check
-    print(f"Preprocessed DataFrame for CatBoost:")
+    # Debug info
+    print("\n Final Preprocessed Input:")
     print(input_df.dtypes)
     print(input_df.head())
 
