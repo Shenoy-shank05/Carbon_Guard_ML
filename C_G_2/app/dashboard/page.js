@@ -26,6 +26,14 @@ export default function Dashboard() {
       try {
         const data = await getLatestCarbonData()
 
+        // Check if user has any data
+        if (!data || !data.latestData) {
+          // New user - no data available
+          setUserData(null)
+          setIsLoading(false)
+          return
+        }
+
         // Transform data for UI
         const transformedData = {
           name: data.latestData?.user?.name || "User",
@@ -38,7 +46,8 @@ export default function Dashboard() {
             countryAverage: 1.31, // Static value for now (monthly in tons)
           },
           lastSubmission: data.latestData?.date || null,
-          majorContributingFeatures: data.insights?.major_contributing_features || [],
+          categoryBreakdown: data.insights?.category_breakdown || [],
+          topIndividualFeatures: data.insights?.top_individual_features || [],
           recommendations: data.insights?.recommendations || [],
         }
 
@@ -46,49 +55,6 @@ export default function Dashboard() {
       } catch (err) {
         console.error("Error fetching data:", err)
         setError("Failed to load dashboard data. Please try again later.")
-
-        // Fallback to mock data if API fails
-        setUserData({
-          name: "User",
-          carbonFootprint: {
-            current: 1.25, // in tons
-            previous: 1.42, // in tons
-            change: -12,
-          },
-          lastSubmission: new Date().toISOString(),
-          majorContributingFeatures: [
-            { feature: "Vehicle Monthly Distance Km", contribution: 0.52, percentage: 42 },
-            { feature: "How Many New Clothes Monthly", contribution: 0.38, percentage: 30 },
-            { feature: "Waste Bag Weekly Count", contribution: 0.21, percentage: 17 },
-            { feature: "Monthly Grocery Bill", contribution: 0.14, percentage: 11 },
-          ],
-          recommendations: [
-            {
-              category: "Transport",
-              title: "Reduce car usage",
-              description: "Try using public transportation, biking, or walking for short trips.",
-              impact: "high",
-            },
-            {
-              category: "Home Energy",
-              title: "Switch to LED lighting",
-              description: "Replace all incandescent bulbs with energy-efficient LED alternatives.",
-              impact: "medium",
-            },
-            {
-              category: "Food",
-              title: "Reduce meat consumption",
-              description: "Try incorporating more plant-based meals into your diet each week.",
-              impact: "high",
-            },
-            {
-              category: "Consumption",
-              title: "Buy fewer new clothes",
-              description: "Consider second-hand shopping or extending the life of your current wardrobe.",
-              impact: "medium",
-            },
-          ],
-        })
       } finally {
         setIsLoading(false)
       }
@@ -105,6 +71,47 @@ export default function Dashboard() {
     )
   }
 
+  // Show new user interface if no data
+  if (!userData) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-16">
+          <div className="bg-white p-8 rounded-xl border border-gray-200 max-w-2xl mx-auto">
+            <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+              <FileInput className="h-8 w-8 text-emerald-600" />
+            </div>
+            <h1 className="text-3xl font-bold mb-4">Welcome to Carbon Guard!</h1>
+            <p className="text-gray-600 mb-8 text-lg">
+              Start your carbon footprint tracking journey by filling out your first assessment form. This will help us
+              understand your current environmental impact and provide personalized recommendations.
+            </p>
+            <Link
+              href="/dashboard/carbon-form"
+              className="bg-emerald-600 text-white py-3 px-8 rounded-lg hover:bg-emerald-500 inline-flex items-center text-lg font-medium"
+            >
+              <FileInput className="h-5 w-5 mr-2" />
+              Fill Your First Form
+            </Link>
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-500">
+              <div className="flex items-center justify-center">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Track your impact
+              </div>
+              <div className="flex items-center justify-center">
+                <Target className="h-4 w-4 mr-2" />
+                Get recommendations
+              </div>
+              <div className="flex items-center justify-center">
+                <TrendingDown className="h-4 w-4 mr-2" />
+                Reduce emissions
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (error) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -114,7 +121,7 @@ export default function Dashboard() {
           className="bg-emerald-600 text-white py-2 px-4 rounded-md hover:bg-emerald-500 inline-flex items-center"
         >
           <FileInput className="h-4 w-4 mr-2" />
-          Submit Your First Carbon Data
+          Submit Your Carbon Data
         </Link>
       </div>
     )
