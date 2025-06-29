@@ -77,7 +77,7 @@ def preprocess_input_for_catboost(data):
     for col in all_expected_columns:
         if col not in input_df.columns:
             if col in numerical_columns:
-                input_df[col] = 0.0  # Use float for numerical columns
+                input_df[col] = 0 # Use float for numerical columns
             else:
                 input_df[col] = 'None'  # Use string for categorical columns
     
@@ -93,9 +93,9 @@ def preprocess_input_for_catboost(data):
     for col in numerical_columns:
         if col in input_df.columns:
             try:
-                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0.0).astype(float)
+                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0.0).astype(int)
             except:
-                input_df[col] = 0.0
+                input_df[col] = 0
     
     for col in categorical_columns:
         if col in input_df.columns:
@@ -106,7 +106,7 @@ def preprocess_input_for_catboost(data):
     
     # Final data type verification
     for col in numerical_columns:
-        input_df[col] = input_df[col].astype(float)
+        input_df[col] = input_df[col].astype(int)
     
     for col in categorical_columns:
         input_df[col] = input_df[col].astype(str)
