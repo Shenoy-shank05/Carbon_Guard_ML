@@ -9,7 +9,7 @@ import shap
 from catboost import CatBoostRegressor
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://carbon-guard-ml.vercel.app"])
 
 # Load CatBoost model
 model_path = 'catboost_model_new.pkl'
