@@ -51,71 +51,42 @@ FEATURE_CATEGORIES = {
 }
 
 def preprocess_input_for_catboost(data):
-    """
-    Minimal preprocessing for CatBoost with proper data type handling
+   """
+    Minimal preprocessing for CatBoost - it handles categorical features automatically
     """
     print(f"Preprocessing data for CatBoost: {data}")
     
     # Convert input data to DataFrame
     input_df = pd.DataFrame([data])
     
-    # Define expected columns and their types based on your training data
-    numerical_columns = [
+    # Define expected columns based on your training data
+    expected_columns = [
+        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+        'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
+        'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With',
         'Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
         'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour'
     ]
     
-    categorical_columns = [
-        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
-        'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
-        'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
-    ]
-    
-    all_expected_columns = numerical_columns + categorical_columns
-    
     # Fill missing columns with default values
-    for col in all_expected_columns:
+    for col in expected_columns:
         if col not in input_df.columns:
-            if col in numerical_columns:
-                input_df[col] = 0.0  # Use float for numerical columns
+            if col in ['Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
+                      'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour']:
+                input_df[col] = 0
             else:
-                input_df[col] = 'None'  # Use string for categorical columns
+                input_df[col] = 'None'
     
     # Handle list-type columns (Recycling, Cooking_With)
     for col in ['Recycling', 'Cooking_With']:
         if col in input_df.columns:
             if isinstance(input_df[col].iloc[0], list):
                 input_df[col] = input_df[col].apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
-            else:
-                input_df[col] = str(input_df[col].iloc[0])
-    
-    # Ensure proper data types
-    for col in numerical_columns:
-        if col in input_df.columns:
-            try:
-                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0.0).astype(float)
-            except:
-                input_df[col] = 0.0
-    
-    for col in categorical_columns:
-        if col in input_df.columns:
-            input_df[col] = input_df[col].astype(str)
     
     # Ensure column order matches training data
-    input_df = input_df.reindex(columns=all_expected_columns)
+    input_df = input_df.reindex(columns=expected_columns, fill_value=0)
     
-    # Final data type verification
-    for col in numerical_columns:
-        input_df[col] = input_df[col].astype(float)
-    
-    for col in categorical_columns:
-        input_df[col] = input_df[col].astype(str)
-    
-    print(f"Preprocessed DataFrame for CatBoost:")
-    print(f"Shape: {input_df.shape}")
-    print(f"Data types:\n{input_df.dtypes}")
-    print(f"Sample data:\n{input_df.head()}")
-    
+    print(f"Preprocessed DataFrame for CatBoost:\n{input_df}")
     return input_df
 
 def get_category_based_shap_importance(input_df, top_individual_features=3):
