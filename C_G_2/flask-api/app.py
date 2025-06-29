@@ -62,11 +62,12 @@ def preprocess_input_for_catboost(data):
     
     # Define expected columns based on your training data
     expected_columns = [
-        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
-        'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
-        'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With',
-        'Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
-        'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour'
+    'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+    'Transport', 'Vehicle Type', 'Social Activity', 'Monthly Grocery Bill',
+    'Frequency of Traveling by Air', 'Vehicle Monthly Distance Km',
+    'Waste Bag Size', 'Waste Bag Weekly Count', 'How Long TV PC Daily Hour',
+    'How Many New Clothes Monthly', 'How Long Internet Daily Hour',
+    'Energy efficiency', 'Recycling', 'Cooking_With'
     ]
     
     # Fill missing columns with default values
