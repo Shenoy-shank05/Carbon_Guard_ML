@@ -14,7 +14,7 @@ import {
   Cell,
   Legend,
 } from "recharts"
-import { ArrowDown, ArrowUp, Leaf, AlertTriangle, Info, FileInput } from "lucide-react"
+import { ArrowDown, ArrowUp, Leaf, AlertTriangle, Info, FileInput, BarChart3 } from "lucide-react"
 import Link from "next/link"
 import { getCarbonData, getLatestCarbonData, kgToTons } from "../../api/carbon"
 
@@ -32,10 +32,18 @@ export default function Insights() {
         // Get latest data with insights
         const latestData = await getLatestCarbonData()
 
+        // Check if user has any data
+        if (!latestData || !latestData.latestData) {
+          // New user - no data available
+          setUserData(null)
+          setIsLoading(false)
+          return
+        }
+
         // Process monthly trend data
         const monthlyTrend = processMonthlyTrend(allData)
 
-        // Transform data for UI
+        // Transform data for UI using new category structure
         const transformedData = {
           carbonFootprint: {
             // Convert kg to tons
@@ -45,14 +53,9 @@ export default function Insights() {
             globalAverage: 1.35, // Static value for now (monthly in tons)
             countryAverage: 1.31, // Static value for now (monthly in tons)
           },
-          // Use the major contributing features for the breakdown if available
-          breakdown: latestData.insights?.major_contributing_features
-            ? latestData.insights.major_contributing_features.map((item) => ({
-                name: formatFeatureName(item.feature),
-                value: Math.abs(kgToTons(item.contribution)), // Convert to tons and ensure positive
-                percentage: item.percentage,
-              }))
-            : [],
+          // Use the new category breakdown structure
+          categoryBreakdown: latestData.insights?.category_breakdown || [],
+          topIndividualFeatures: latestData.insights?.top_individual_features || [],
           monthlyTrend: monthlyTrend,
           recommendations: latestData.insights?.recommendations || [],
         }
@@ -136,6 +139,33 @@ export default function Insights() {
     )
   }
 
+  // Show new user interface if no data
+  if (!userData) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center py-16">
+          <div className="bg-white p-8 rounded-xl border border-gray-200 max-w-2xl mx-auto">
+            <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+              <BarChart3 className="h-8 w-8 text-emerald-600" />
+            </div>
+            <h1 className="text-3xl font-bold mb-4">No Data Available</h1>
+            <p className="text-gray-600 mb-8 text-lg">
+              You haven't submitted any carbon footprint data yet. Fill out the assessment form to see your detailed
+              insights and recommendations.
+            </p>
+            <Link
+              href="/dashboard/carbon-form"
+              className="bg-emerald-600 text-white py-3 px-8 rounded-lg hover:bg-emerald-500 inline-flex items-center text-lg font-medium"
+            >
+              <FileInput className="h-5 w-5 mr-2" />
+              Submit Your First Assessment
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (error) {
     return (
       <div className="max-w-7xl mx-auto">
@@ -151,11 +181,11 @@ export default function Insights() {
     )
   }
 
-  // Prepare data for pie chart
-  const pieData = userData.breakdown.map((item) => ({
-    name: item.name,
-    value: item.value,
-    percentage: item.percentage,
+  // Prepare data for pie chart using category breakdown
+  const pieData = userData.categoryBreakdown.map((category) => ({
+    name: category.name,
+    value: category.value,
+    percentage: category.percentage,
   }))
 
   // Colors for pie chart
