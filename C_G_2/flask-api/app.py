@@ -7,6 +7,7 @@ import os
 import joblib
 import shap
 from catboost import CatBoostRegressor
+from catboost import Pool
 
 app = Flask(__name__)
 CORS(app, origins=["https://carbon-guard-ml.vercel.app"])
