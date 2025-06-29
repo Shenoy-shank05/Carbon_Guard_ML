@@ -50,7 +50,7 @@ FEATURE_CATEGORIES = {
     ]
 }
 
-def preprocess_input_for_catboost(data):
+
 def preprocess_input_for_catboost(data):
     """
     Minimal preprocessing for CatBoost - it handles categorical features automatically
