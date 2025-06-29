@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load CatBoost model
-model_path = 'catboost_model.pkl'
+model_path = 'catboost_model_new.pkl'
 if os.path.exists(model_path):
     model = joblib.load(model_path)
     print("CatBoost model loaded successfully")
