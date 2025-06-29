@@ -406,38 +406,40 @@ def generate_category_based_recommendations(data, category_breakdown, top_featur
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    try:
+try:
         if model is None:
             return jsonify({'error': 'Model not loaded'}), 500
-            
-        data = request.json
+
+        data = request.get_json(force=True)
         print(f"Received data for prediction: {data}")
-        
-        # Preprocess input for CatBoost
+
+        # Preprocess input
         input_df = preprocess_input_for_catboost(data)
-        
-        # Make prediction
-        prediction = model.predict(input_df)[0]
-        prediction = abs(float(prediction))  # Ensure positive value
-        
-        print(f"CatBoost prediction result: {prediction}")
-        
-        # Get category-based SHAP importance
+
+        # Create Pool with categorical feature info
+        cat_features = [
+            'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+            'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
+            'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
+        ]
+        input_pool = Pool(data=input_df, cat_features=cat_features)
+
+        # Predict using Pool
+        prediction = float(abs(model.predict(input_pool)[0]))
+
+        # SHAP + Recommendations
         category_breakdown, top_features = get_category_based_shap_importance(input_df)
-        
-        # Generate targeted recommendations
         recommendations = generate_category_based_recommendations(data, category_breakdown, top_features)
-        
-        # Return comprehensive response
+
         return jsonify({
             'prediction': prediction,
             'category_breakdown': category_breakdown,
             'top_individual_features': top_features,
             'recommendations': recommendations
         })
-    
+
     except Exception as e:
-        print(f"Error in /predict: {str(e)}")
+        print(f"❌ Error in /predict: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/insights', methods=['POST'])
