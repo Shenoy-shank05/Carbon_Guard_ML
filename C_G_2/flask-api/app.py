@@ -56,67 +56,57 @@ def preprocess_input_for_catboost(data):
     """
     print(f"Preprocessing data for CatBoost: {data}")
     
-    # Convert input data to DataFrame
+    # Convert to DataFrame
     input_df = pd.DataFrame([data])
-    
-    # Define expected columns and their types based on your training data
+
     numerical_columns = [
         'Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
         'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour'
     ]
-    
+
     categorical_columns = [
         'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
         'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
         'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
     ]
-    
+
     all_expected_columns = numerical_columns + categorical_columns
-    
-    # Fill missing columns with default values
+
+    # Fill missing columns
     for col in all_expected_columns:
         if col not in input_df.columns:
             if col in numerical_columns:
-                input_df[col] = 0 # Use float for numerical columns
+                input_df[col] = 0
             else:
-                input_df[col] = 'None'  # Use string for categorical columns
-    
-    # Handle list-type columns (Recycling, Cooking_With)
+                input_df[col] = 'None'
+
+    # Handle list-type columns
     for col in ['Recycling', 'Cooking_With']:
         if col in input_df.columns:
-            if isinstance(input_df[col].iloc[0], list):
-                input_df[col] = input_df[col].apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
+            val = input_df[col].iloc[0]
+            if isinstance(val, list):
+                input_df[col] = [', '.join(map(str, val))]
             else:
-                input_df[col] = str(input_df[col].iloc[0])
-    
-    # Ensure proper data types
+                input_df[col] = [str(val)]
+
+    # Coerce numerical columns safely
     for col in numerical_columns:
-        if col in input_df.columns:
-            try:
-                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0.0).astype(int)
-            except:
-                input_df[col] = 0
-    
-    for col in categorical_columns:
-        if col in input_df.columns:
-            input_df[col] = input_df[col].astype(str)
-    
-    # Ensure column order matches training data
-    input_df = input_df.reindex(columns=all_expected_columns)
-    
-    # Final data type verification
-    for col in numerical_columns:
-        input_df[col] = input_df[col].astype(int)
-    
+        input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0).astype(int)
+
+    # Force categorical columns to string
     for col in categorical_columns:
         input_df[col] = input_df[col].astype(str)
-    
+
+    # Reindex just to match order, but no NaNs should be created here
+    input_df = input_df[all_expected_columns]
+
+    # Final check
     print(f"Preprocessed DataFrame for CatBoost:")
-    print(f"Shape: {input_df.shape}")
-    print(f"Data types:\n{input_df.dtypes}")
-    print(f"Sample data:\n{input_df.head()}")
-    
+    print(input_df.dtypes)
+    print(input_df.head())
+
     return input_df
+
 
 def get_category_based_shap_importance(input_df, top_individual_features=3):
     """
