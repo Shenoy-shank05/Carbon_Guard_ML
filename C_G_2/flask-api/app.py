@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Load CatBoost model
-model_path = 'catboost_model_new.pkl'
+model_path = 'catboost_model.pkl'
 if os.path.exists(model_path):
     model = joblib.load(model_path)
     print("CatBoost model loaded successfully")
@@ -32,41 +32,70 @@ if model is not None:
 
 def preprocess_input_for_catboost(data):
     """
-    Minimal preprocessing for CatBoost - it handles categorical features automatically
+    Minimal preprocessing for CatBoost with proper data type handling
     """
     print(f"Preprocessing data for CatBoost: {data}")
     
     # Convert input data to DataFrame
     input_df = pd.DataFrame([data])
     
-    # Define expected columns based on your training data
-    expected_columns = [
-        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
-        'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
-        'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With',
+    # Define expected columns and their types based on your training data
+    numerical_columns = [
         'Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
         'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour'
     ]
     
+    categorical_columns = [
+        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+        'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
+        'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
+    ]
+    
+    all_expected_columns = numerical_columns + categorical_columns
+    
     # Fill missing columns with default values
-    for col in expected_columns:
+    for col in all_expected_columns:
         if col not in input_df.columns:
-            if col in ['Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
-                      'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour']:
-                input_df[col] = 0
+            if col in numerical_columns:
+                input_df[col] = 0.0  # Use float for numerical columns
             else:
-                input_df[col] = 'None'
+                input_df[col] = 'None'  # Use string for categorical columns
     
     # Handle list-type columns (Recycling, Cooking_With)
     for col in ['Recycling', 'Cooking_With']:
         if col in input_df.columns:
             if isinstance(input_df[col].iloc[0], list):
                 input_df[col] = input_df[col].apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
+            else:
+                input_df[col] = str(input_df[col].iloc[0])
+    
+    # Ensure proper data types
+    for col in numerical_columns:
+        if col in input_df.columns:
+            try:
+                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0.0).astype(float)
+            except:
+                input_df[col] = 0.0
+    
+    for col in categorical_columns:
+        if col in input_df.columns:
+            input_df[col] = input_df[col].astype(str)
     
     # Ensure column order matches training data
-    input_df = input_df.reindex(columns=expected_columns, fill_value=0)
+    input_df = input_df.reindex(columns=all_expected_columns)
     
-    print(f"Preprocessed DataFrame for CatBoost:\n{input_df}")
+    # Final data type verification
+    for col in numerical_columns:
+        input_df[col] = input_df[col].astype(float)
+    
+    for col in categorical_columns:
+        input_df[col] = input_df[col].astype(str)
+    
+    print(f"Preprocessed DataFrame for CatBoost:")
+    print(f"Shape: {input_df.shape}")
+    print(f"Data types:\n{input_df.dtypes}")
+    print(f"Sample data:\n{input_df.head()}")
+    
     return input_df
 
 def get_shap_feature_importance(input_df, top_n=7):
@@ -78,26 +107,40 @@ def get_shap_feature_importance(input_df, top_n=7):
             print("SHAP explainer not available")
             return []
         
+        print(f"Input DataFrame for SHAP:")
+        print(f"Shape: {input_df.shape}")
+        print(f"Data types: {input_df.dtypes.to_dict()}")
+        
         # Calculate SHAP values
         shap_values = explainer.shap_values(input_df)
+        
+        # Handle different SHAP output formats
+        if isinstance(shap_values, list):
+            # For multi-class or multi-output models
+            shap_vals = shap_values[0][0] if len(shap_values[0].shape) > 1 else shap_values[0]
+        else:
+            # For single output models
+            shap_vals = shap_values[0] if len(shap_values.shape) > 1 else shap_values
         
         # Get feature names
         feature_names = input_df.columns.tolist()
         
-        # Calculate absolute SHAP values for feature importance
-        if len(shap_values.shape) > 1:
-            # For single prediction, take the first row
-            shap_vals = shap_values[0]
-        else:
-            shap_vals = shap_values
+        # Ensure we have the right number of SHAP values
+        if len(shap_vals) != len(feature_names):
+            print(f"Mismatch: {len(shap_vals)} SHAP values vs {len(feature_names)} features")
+            return []
         
         # Create feature importance dictionary
         feature_importance = {}
         for i, feature in enumerate(feature_names):
-            feature_importance[feature] = abs(shap_vals[i])
+            feature_importance[feature] = abs(float(shap_vals[i]))
         
         # Calculate total importance for percentage calculation
         total_importance = sum(feature_importance.values())
+        
+        if total_importance == 0:
+            print("Total importance is zero, returning empty list")
+            return []
         
         # Sort features by importance
         sorted_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
@@ -106,7 +149,7 @@ def get_shap_feature_importance(input_df, top_n=7):
         others_importance = 0
         
         for i, (feature, importance) in enumerate(sorted_features):
-            percentage = (importance / total_importance) * 100 if total_importance != 0 else 0
+            percentage = (importance / total_importance) * 100
             
             if i < top_n and percentage > 1:  # Only include features with >1% contribution
                 major_features.append({
@@ -120,7 +163,7 @@ def get_shap_feature_importance(input_df, top_n=7):
         
         # Add "Others" category if there are remaining features
         if others_importance > 0:
-            others_percentage = (others_importance / total_importance) * 100 if total_importance != 0 else 0
+            others_percentage = (others_importance / total_importance) * 100
             if others_percentage > 1:
                 major_features.append({
                     'feature': 'Others',
@@ -134,6 +177,8 @@ def get_shap_feature_importance(input_df, top_n=7):
         
     except Exception as e:
         print(f"Error calculating SHAP values: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def generate_targeted_recommendations(data, major_features):
