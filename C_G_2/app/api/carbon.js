@@ -114,7 +114,7 @@ export const getLatestCarbonData = async () => {
           "Waste Bag Weekly Count": response.data.latestData.wasteBagWeeklyCount,
           "How Long TV PC Daily Hour": response.data.latestData.howLongTvPcDailyHour,
           "How Many New Clothes Monthly": response.data.latestData.howManyNewClothesMonthly,
-          "How Long InternetDailyHour": response.data.latestData.howLongInternetDailyHour,
+          "How Long Internet Daily Hour": response.data.latestData.howLongInternetDailyHour,
           "Energy efficiency": response.data.latestData.energyEfficiency,
           Recycling: response.data.latestData.recycling,
           Cooking_With: response.data.latestData.cookingWith,
