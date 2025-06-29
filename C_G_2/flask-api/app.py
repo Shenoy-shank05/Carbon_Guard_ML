@@ -407,7 +407,7 @@ def generate_category_based_recommendations(data, category_breakdown, top_featur
 
 @app.route('/predict', methods=['POST'])
 def predict():
-try:
+    try:
         if model is None:
             return jsonify({'error': 'Model not loaded'}), 500
 
