@@ -30,6 +30,26 @@ if model is not None:
     except Exception as e:
         print(f"Error initializing SHAP explainer: {str(e)}")
 
+# Define feature categories
+FEATURE_CATEGORIES = {
+    'Personal Information': [
+        'Body Type', 'Sex', 'Diet', 'How Often Shower'
+    ],
+    'Transportation': [
+        'Transport', 'Vehicle Type', 'Vehicle Monthly Distance Km', 'Frequency of Traveling by Air'
+    ],
+    'Lifestyle': [
+        'Social Activity', 'Monthly Grocery Bill', 'How Long TV PC Daily Hour', 
+        'How Long Internet Daily Hour', 'How Many New Clothes Monthly'
+    ],
+    'Waste & Consumption': [
+        'Waste Bag Size', 'Waste Bag Weekly Count', 'Recycling', 'Cooking_With'
+    ],
+    'Home Energy': [
+        'Heating Energy Source', 'Energy efficiency'
+    ]
+}
+
 def preprocess_input_for_catboost(data):
     """
     Minimal preprocessing for CatBoost with proper data type handling
@@ -98,14 +118,14 @@ def preprocess_input_for_catboost(data):
     
     return input_df
 
-def get_shap_feature_importance(input_df, top_n=7):
+def get_category_based_shap_importance(input_df, top_individual_features=3):
     """
-    Calculate SHAP values and return major contributing features with percentages
+    Calculate SHAP values and return both category-wise and individual feature importance
     """
     try:
         if explainer is None:
             print("SHAP explainer not available")
-            return []
+            return [], []
         
         print(f"Input DataFrame for SHAP:")
         print(f"Shape: {input_df.shape}")
@@ -128,7 +148,7 @@ def get_shap_feature_importance(input_df, top_n=7):
         # Ensure we have the right number of SHAP values
         if len(shap_vals) != len(feature_names):
             print(f"Mismatch: {len(shap_vals)} SHAP values vs {len(feature_names)} features")
-            return []
+            return [], []
         
         # Create feature importance dictionary
         feature_importance = {}
@@ -139,200 +159,242 @@ def get_shap_feature_importance(input_df, top_n=7):
         total_importance = sum(feature_importance.values())
         
         if total_importance == 0:
-            print("Total importance is zero, returning empty list")
-            return []
+            print("Total importance is zero, returning empty lists")
+            return [], []
         
-        # Sort features by importance
-        sorted_features = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
+        # Calculate category-wise importance
+        category_importance = {}
+        category_details = {}
         
-        major_features = []
-        others_importance = 0
-        
-        for i, (feature, importance) in enumerate(sorted_features):
-            percentage = (importance / total_importance) * 100
+        for category, features in FEATURE_CATEGORIES.items():
+            category_total = 0
+            category_features = []
             
-            if i < top_n and percentage > 1:  # Only include features with >1% contribution
-                major_features.append({
+            for feature in features:
+                if feature in feature_importance:
+                    importance = feature_importance[feature]
+                    category_total += importance
+                    category_features.append({
+                        'feature': feature,
+                        'importance': importance,
+                        'contribution': float(shap_vals[feature_names.index(feature)])
+                    })
+            
+            if category_total > 0:
+                category_importance[category] = category_total
+                category_details[category] = {
+                    'total_importance': category_total,
+                    'percentage': (category_total / total_importance) * 100,
+                    'features': sorted(category_features, key=lambda x: x['importance'], reverse=True)
+                }
+        
+        # Create category breakdown for pie chart
+        category_breakdown = []
+        for category, details in category_details.items():
+            category_breakdown.append({
+                'name': category,
+                'value': details['total_importance'],
+                'percentage': round(details['percentage'], 2),
+                'top_features': [f['feature'] for f in details['features'][:2]]  # Top 2 features in category
+            })
+        
+        # Sort categories by importance
+        category_breakdown = sorted(category_breakdown, key=lambda x: x['value'], reverse=True)
+        
+        # Get top individual features across all categories
+        all_features_sorted = sorted(feature_importance.items(), key=lambda x: x[1], reverse=True)
+        top_individual_features_list = []
+        
+        for feature, importance in all_features_sorted[:top_individual_features]:
+            percentage = (importance / total_importance) * 100
+            if percentage > 1:  # Only include features with >1% contribution
+                # Find which category this feature belongs to
+                feature_category = "Other"
+                for cat, features in FEATURE_CATEGORIES.items():
+                    if feature in features:
+                        feature_category = cat
+                        break
+                
+                top_individual_features_list.append({
                     'feature': feature,
+                    'category': feature_category,
                     'contribution': float(shap_vals[feature_names.index(feature)]),
                     'importance': float(importance),
                     'percentage': round(percentage, 2)
                 })
-            else:
-                others_importance += importance
         
-        # Add "Others" category if there are remaining features
-        if others_importance > 0:
-            others_percentage = (others_importance / total_importance) * 100
-            if others_percentage > 1:
-                major_features.append({
-                    'feature': 'Others',
-                    'contribution': 0,
-                    'importance': float(others_importance),
-                    'percentage': round(others_percentage, 2)
-                })
+        print(f"Category-based breakdown: {category_breakdown}")
+        print(f"Top individual features: {top_individual_features_list}")
         
-        print(f"SHAP-based major contributing features: {major_features}")
-        return major_features
+        return category_breakdown, top_individual_features_list
         
     except Exception as e:
         print(f"Error calculating SHAP values: {str(e)}")
         import traceback
         traceback.print_exc()
-        return []
+        return [], []
 
-def generate_targeted_recommendations(data, major_features):
+def generate_category_based_recommendations(data, category_breakdown, top_features):
     """
-    Generate recommendations based on SHAP feature importance
+    Generate recommendations based on category importance and top features
     """
-    print(f"Generating targeted recommendations based on SHAP features: {major_features}")
+    print(f"Generating recommendations based on categories: {[c['name'] for c in category_breakdown]}")
     
     recommendations = []
     
-    # Feature-specific recommendation mapping
-    feature_recommendations = {
+    # Category-specific recommendation templates
+    category_recommendations = {
+        'Personal Information': {
+            'Diet': {
+                'omnivore': {
+                    'title': 'Adopt a more plant-based diet',
+                    'description': 'Your diet significantly impacts your carbon footprint. Try reducing meat consumption and incorporating more plant-based meals.',
+                    'impact': 'high'
+                },
+                'vegetarian': {
+                    'title': 'Optimize your vegetarian diet',
+                    'description': 'Great dietary choice! Focus on local, organic produce and consider reducing dairy consumption.',
+                    'impact': 'medium'
+                },
+                'vegan': {
+                    'title': 'Maintain your sustainable diet',
+                    'description': 'Excellent choice! Continue focusing on local, seasonal produce to minimize transportation emissions.',
+                    'impact': 'low'
+                }
+            },
+            'Body Type': {
+                'default': {
+                    'title': 'Maintain healthy lifestyle choices',
+                    'description': 'Your personal characteristics influence your baseline footprint. Focus on sustainable lifestyle choices.',
+                    'impact': 'low'
+                }
+            }
+        },
+        'Transportation': {
+            'high_impact': {
+                'title': 'Revolutionize your transportation',
+                'description': 'Transportation is your biggest carbon contributor. Consider electric vehicles, public transport, or remote work options.',
+                'impact': 'high'
+            },
+            'medium_impact': {
+                'title': 'Optimize your transportation choices',
+                'description': 'Transportation significantly impacts your footprint. Try carpooling, combining trips, or using more efficient vehicles.',
+                'impact': 'medium'
+            }
+        },
+        'Lifestyle': {
+            'high_impact': {
+                'title': 'Adopt sustainable lifestyle habits',
+                'description': 'Your lifestyle choices significantly impact your footprint. Focus on reducing consumption and energy use.',
+                'impact': 'high'
+            },
+            'medium_impact': {
+                'title': 'Fine-tune your lifestyle choices',
+                'description': 'Your lifestyle contributes notably to your footprint. Consider reducing screen time and consumption.',
+                'impact': 'medium'
+            }
+        },
+        'Waste & Consumption': {
+            'high_impact': {
+                'title': 'Minimize waste and consumption',
+                'description': 'Your consumption patterns significantly impact your footprint. Focus on reducing, reusing, and recycling.',
+                'impact': 'high'
+            },
+            'medium_impact': {
+                'title': 'Improve waste management',
+                'description': 'Your waste habits contribute to your footprint. Enhance recycling and reduce unnecessary purchases.',
+                'impact': 'medium'
+            }
+        },
+        'Home Energy': {
+            'high_impact': {
+                'title': 'Upgrade your home energy systems',
+                'description': 'Your home energy use significantly impacts your footprint. Consider renewable energy and efficient appliances.',
+                'impact': 'high'
+            },
+            'medium_impact': {
+                'title': 'Improve home energy efficiency',
+                'description': 'Your home energy contributes to your footprint. Focus on insulation and energy-efficient appliances.',
+                'impact': 'medium'
+            }
+        }
+    }
+    
+    # Generate recommendations based on category importance
+    for i, category in enumerate(category_breakdown[:3]):  # Top 3 categories
+        category_name = category['name']
+        percentage = category['percentage']
+        
+        if category_name in category_recommendations:
+            if category_name == 'Personal Information':
+                # Handle diet-specific recommendations
+                diet = data.get('Diet', '').lower()
+                if diet in category_recommendations[category_name]['Diet']:
+                    rec = category_recommendations[category_name]['Diet'][diet].copy()
+                else:
+                    rec = category_recommendations[category_name]['Body Type']['default'].copy()
+            else:
+                # Handle other categories based on impact level
+                impact_level = 'high_impact' if percentage > 25 else 'medium_impact'
+                if impact_level in category_recommendations[category_name]:
+                    rec = category_recommendations[category_name][impact_level].copy()
+                else:
+                    continue
+            
+            rec['category'] = category_name
+            rec['description'] = f"This category contributes {percentage}% to your footprint. " + rec['description']
+            recommendations.append(rec)
+    
+    # Add specific feature-based recommendations
+    feature_specific_recommendations = {
         'Vehicle Monthly Distance Km': {
-            'category': 'Transport',
-            'title': 'Reduce vehicle distance',
-            'description': 'Your vehicle usage is a major contributor. Consider carpooling, public transport, or working from home to reduce monthly driving distance.',
+            'title': 'Reduce driving distance',
+            'description': 'Your monthly driving distance is a major factor. Consider working from home, carpooling, or using public transport.',
             'impact': 'high'
         },
         'Monthly Grocery Bill': {
-            'category': 'Food',
-            'title': 'Optimize food consumption',
-            'description': 'Your grocery spending significantly impacts your footprint. Focus on local, seasonal produce and reduce food waste.',
-            'impact': 'high'
+            'title': 'Optimize food spending and choices',
+            'description': 'Your grocery spending indicates consumption patterns. Focus on local, seasonal, and less processed foods.',
+            'impact': 'medium'
         },
         'How Many New Clothes Monthly': {
-            'category': 'Consumption',
-            'title': 'Reduce clothing purchases',
-            'description': 'Clothing consumption is a major factor. Try second-hand shopping, clothing swaps, or extending garment lifespan.',
+            'title': 'Reduce clothing consumption',
+            'description': 'Your clothing purchases significantly impact your footprint. Try second-hand shopping and extending garment life.',
             'impact': 'medium'
         },
         'Waste Bag Weekly Count': {
-            'category': 'Waste',
             'title': 'Minimize waste generation',
-            'description': 'Your waste production significantly contributes to your footprint. Focus on reducing, reusing, and composting.',
+            'description': 'Your waste production is significant. Focus on reducing packaging, composting, and reusing items.',
             'impact': 'high'
-        },
-        'How Long TV PC Daily Hour': {
-            'category': 'Energy',
-            'title': 'Reduce screen time energy use',
-            'description': 'Your device usage contributes notably. Use energy-efficient devices and enable power-saving modes.',
-            'impact': 'medium'
-        },
-        'How Long Internet Daily Hour': {
-            'category': 'Digital',
-            'title': 'Optimize digital consumption',
-            'description': 'Your internet usage impacts your footprint. Reduce streaming quality and use energy-efficient devices.',
-            'impact': 'low'
         }
     }
     
-    # Transport-related recommendations
-    transport_recommendations = {
-        'private': {
-            'category': 'Transport',
-            'title': 'Switch to sustainable transport',
-            'description': 'Private vehicle use is impactful. Consider electric vehicles, public transport, or active transportation.',
-            'impact': 'high'
-        },
-        'public': {
-            'category': 'Transport',
-            'title': 'Optimize public transport use',
-            'description': 'Great choice using public transport! Consider combining with cycling or walking for shorter trips.',
-            'impact': 'medium'
-        }
-    }
-    
-    # Diet-related recommendations
-    diet_recommendations = {
-        'omnivore': {
-            'category': 'Food',
-            'title': 'Reduce meat consumption',
-            'description': 'Your diet significantly impacts your footprint. Try plant-based meals 2-3 times per week.',
-            'impact': 'high'
-        },
-        'vegetarian': {
-            'category': 'Food',
-            'title': 'Optimize vegetarian choices',
-            'description': 'Good dietary choice! Focus on local, organic produce and minimize dairy consumption.',
-            'impact': 'medium'
-        },
-        'vegan': {
-            'category': 'Food',
-            'title': 'Maintain sustainable diet',
-            'description': 'Excellent dietary choice! Focus on local, seasonal produce to further reduce impact.',
-            'impact': 'low'
-        }
-    }
-    
-    # Energy-related recommendations
-    energy_recommendations = {
-        'coal': {
-            'category': 'Energy',
-            'title': 'Switch from coal heating',
-            'description': 'Coal heating has high emissions. Consider switching to natural gas, electricity, or renewable sources.',
-            'impact': 'high'
-        },
-        'natural gas': {
-            'category': 'Energy',
-            'title': 'Improve heating efficiency',
-            'description': 'Natural gas is better than coal. Improve insulation and consider heat pumps for efficiency.',
-            'impact': 'medium'
-        },
-        'electricity': {
-            'category': 'Energy',
-            'title': 'Use renewable electricity',
-            'description': 'Electric heating can be clean. Switch to renewable energy providers if available.',
-            'impact': 'medium'
-        }
-    }
-    
-    # Generate recommendations based on major contributing features
-    for feature_info in major_features[:5]:  # Focus on top 5 features
+    # Add recommendations for top individual features
+    for feature_info in top_features[:2]:  # Top 2 individual features
         feature_name = feature_info['feature']
         percentage = feature_info['percentage']
         
-        # Skip "Others" category
-        if feature_name == 'Others':
-            continue
-            
-        # Add feature-specific recommendations
-        if feature_name in feature_recommendations:
-            rec = feature_recommendations[feature_name].copy()
-            rec['description'] = f"This factor contributes {percentage}% to your footprint. " + rec['description']
+        if feature_name in feature_specific_recommendations:
+            rec = feature_specific_recommendations[feature_name].copy()
+            rec['category'] = feature_info['category']
+            rec['description'] = f"This factor contributes {percentage}% individually. " + rec['description']
             recommendations.append(rec)
     
-    # Add category-specific recommendations based on data values
-    transport_type = data.get('Transport', '').lower()
-    if transport_type in transport_recommendations:
-        recommendations.append(transport_recommendations[transport_type])
-    
-    diet_type = data.get('Diet', '').lower()
-    if diet_type in diet_recommendations:
-        recommendations.append(diet_recommendations[diet_type])
-    
-    heating_type = data.get('Heating Energy Source', '').lower()
-    if heating_type in energy_recommendations:
-        recommendations.append(energy_recommendations[heating_type])
-    
-    # Add energy efficiency recommendations
+    # Add general recommendations based on data
     if data.get('Energy efficiency') == 'No':
         recommendations.append({
-            'category': 'Energy',
+            'category': 'Home Energy',
             'title': 'Improve energy efficiency',
-            'description': 'Upgrade to energy-efficient appliances and LED lighting to reduce your energy footprint.',
+            'description': 'You indicated low energy efficiency awareness. Upgrade to LED lighting and energy-efficient appliances.',
             'impact': 'medium'
         })
     
-    # Add recycling recommendations
     recycling = data.get('Recycling', [])
     if not recycling or 'None' in str(recycling):
         recommendations.append({
-            'category': 'Waste',
+            'category': 'Waste & Consumption',
             'title': 'Start comprehensive recycling',
-            'description': 'Implement recycling for paper, plastic, glass, and metal to significantly reduce waste impact.',
+            'description': 'You\'re not recycling effectively. Implement proper sorting for paper, plastic, glass, and metal.',
             'impact': 'medium'
         })
     
@@ -365,16 +427,17 @@ def predict():
         
         print(f"CatBoost prediction result: {prediction}")
         
-        # Get SHAP-based feature importance
-        major_features = get_shap_feature_importance(input_df)
+        # Get category-based SHAP importance
+        category_breakdown, top_features = get_category_based_shap_importance(input_df)
         
         # Generate targeted recommendations
-        recommendations = generate_targeted_recommendations(data, major_features)
+        recommendations = generate_category_based_recommendations(data, category_breakdown, top_features)
         
         # Return comprehensive response
         return jsonify({
             'prediction': prediction,
-            'major_contributing_features': major_features,
+            'category_breakdown': category_breakdown,
+            'top_individual_features': top_features,
             'recommendations': recommendations
         })
     
@@ -400,15 +463,16 @@ def get_insights():
         
         print(f"Carbon emission prediction: {prediction}")
         
-        # Get SHAP-based feature importance
-        major_features = get_shap_feature_importance(input_df)
+        # Get category-based SHAP importance
+        category_breakdown, top_features = get_category_based_shap_importance(input_df)
         
-        # Generate targeted recommendations based on SHAP values
-        recommendations = generate_targeted_recommendations(data, major_features)
+        # Generate targeted recommendations based on categories
+        recommendations = generate_category_based_recommendations(data, category_breakdown, top_features)
         
         # Build comprehensive insights response
         insights = {
-            'major_contributing_features': major_features,
+            'category_breakdown': category_breakdown,
+            'top_individual_features': top_features,
             'recommendations': recommendations
         }
         
