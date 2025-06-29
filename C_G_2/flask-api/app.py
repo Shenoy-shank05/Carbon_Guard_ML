@@ -78,18 +78,40 @@ def preprocess_input_for_catboost(data):
             else:
                 input_df[col] = 'None'
     
-    # Handle list-type columns (Recycling, Cooking_With)
-    for col in ['Recycling', 'Cooking_With']:
+    # Reorder columns to match training data order
+    input_df = input_df[expected_columns]
+    
+    # Define categorical columns - these should match what you used during training
+    categorical_features = [
+        'Body Type', 'Sex', 'Diet', 'How Often Shower', 'Heating Energy Source',
+        'Transport', 'Vehicle Type', 'Social Activity', 'Frequency of Traveling by Air',
+        'Waste Bag Size', 'Energy efficiency', 'Recycling', 'Cooking_With'
+    ]
+    
+    # Ensure categorical columns are strings
+    for col in categorical_features:
         if col in input_df.columns:
-            if isinstance(input_df[col].iloc[0], list):
-                input_df[col] = input_df[col].apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
+            input_df[col] = input_df[col].astype(str)
     
-    # Ensure column order matches training data
-    input_df = input_df.reindex(columns=expected_columns, fill_value=0)
+    # Ensure numerical columns are numeric
+    numerical_features = [
+        'Monthly Grocery Bill', 'Vehicle Monthly Distance Km', 'Waste Bag Weekly Count',
+        'How Long TV PC Daily Hour', 'How Many New Clothes Monthly', 'How Long Internet Daily Hour'
+    ]
     
-    print(f"Preprocessed DataFrame for CatBoost:\n{input_df}")
+    for col in numerical_features:
+        if col in input_df.columns:
+            try:
+                input_df[col] = pd.to_numeric(input_df[col], errors='coerce')
+                input_df[col] = input_df[col].fillna(0)  # Fill NaN with 0
+            except:
+                input_df[col] = 0
+    
+    print(f"Processed DataFrame shape: {input_df.shape}")
+    print(f"DataFrame dtypes:\n{input_df.dtypes}")
+    print(f"Sample data:\n{input_df.head()}")
+    
     return input_df
-
 def get_category_based_shap_importance(input_df, top_individual_features=3):
     """
     Calculate SHAP values and return both category-wise and individual feature importance
