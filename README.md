@@ -46,7 +46,7 @@ Carbon-Guard is a full-stack web application that helps users track and reduce t
 - Flask, Node.js, Express
 
 **ML Model**:
-- Python, Scikit-learn, Google Colab,  Regression ML Model (Lasso Regression)
+- Python, Scikit-learn, Google Colab,  Regression ML Model (catboost Regression)
 
 **Database**:
 - MongoDB
